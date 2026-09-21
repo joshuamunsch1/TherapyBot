@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TherapyBot — Diagnostic Interview Training</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container narrow">
+    <h1>TherapyBot</h1>
+    <p class="subtitle">Diagnostic interview training with a simulated patient<br>Diagnostik-Training mit einer simulierten Patientin / einem simulierten Patienten</p>
+
+    <div class="card">
+      <div class="field">
+        <label for="name">Name or student ID / Name oder Studierenden-Nr.</label>
+        <input type="text" id="name" autocomplete="off" autofocus />
+      </div>
+
+      <div class="field">
+        <label>Session language / Sitzungssprache</label>
+        <div class="lang-toggle">
+          <input type="radio" name="language" id="lang-en" value="en" checked />
+          <label for="lang-en">English</label>
+          <input type="radio" name="language" id="lang-de" value="de" />
+          <label for="lang-de">Deutsch</label>
+        </div>
+      </div>
+
+      <button id="start">Start session / Sitzung starten</button>
+      <div id="form-error" class="error hidden"></div>
+
+      <div class="notice">
+        You will interview a <strong>simulated patient</strong> played by an AI model, which has been
+        assigned a random disorder. Interview the patient, then submit your diagnosis. The conversation
+        is recorded for teaching purposes. This is a training exercise — it is not clinical training,
+        therapy, or a real person.
+        <br><br>
+        Sie führen ein Gespräch mit einer <strong>simulierten Patientin / einem simulierten Patienten</strong>
+        (KI-Modell) mit einer zufällig zugewiesenen Störung. Führen Sie das Interview und reichen Sie danach
+        Ihre Diagnose ein. Das Gespräch wird zu Lehrzwecken gespeichert. Dies ist eine Übung — keine klinische
+        Ausbildung, keine Therapie und keine reale Person.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById("start");
+    const nameEl = document.getElementById("name");
+    const errorEl = document.getElementById("form-error");
+
+    async function start() {
+      const name = nameEl.value.trim();
+      const language = document.querySelector('input[name="language"]:checked').value;
+      if (!name) {
+        errorEl.textContent = "Please enter your name or student ID. / Bitte Name oder Studierenden-Nr. eingeben.";
+        errorEl.classList.remove("hidden");
+        return;
+      }
+      startBtn.disabled = true;
+      errorEl.classList.add("hidden");
+      try {
+        const res = await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, language }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unknown error");
+        window.location.href = "/session/" + data.session_id;
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove("hidden");
+        startBtn.disabled = false;
+      }
+    }
+
+    startBtn.addEventListener("click", start);
+    nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
+  </script>
+</body>
+</html>

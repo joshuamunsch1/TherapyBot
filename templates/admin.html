@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TherapyBot — Sessions</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container wide">
+    <h1>Sessions</h1>
+    <p class="subtitle">{{ sessions | length }} recorded session(s)</p>
+    <div class="card">
+      <div class="toolbar">
+        <a href="{{ url_for('export_csv') }}">Download CSV</a>
+        <a href="{{ url_for('export_json') }}">Download JSON (full transcripts)</a>
+        <a href="{{ url_for('admin_logout') }}">Log out</a>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Started</th>
+            <th>Student</th>
+            <th>Lang</th>
+            <th>Disorder</th>
+            <th>Guess</th>
+            <th>Result</th>
+            <th>Msgs</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+          <tr>
+            <td>{{ s["started_at"][:16].replace("T", " ") }}</td>
+            <td>{{ s["student_name"] }}</td>
+            <td>{{ s["language"] }}</td>
+            <td>{{ s["disorder_label"] }}</td>
+            <td>{{ s["guess_label"] or "—" }}</td>
+            <td>
+              {% if s["diagnosis_correct"] is none %}
+                <span class="tag open">open</span>
+              {% elif s["diagnosis_correct"] %}
+                <span class="tag correct">correct</span>
+              {% else %}
+                <span class="tag incorrect">incorrect</span>
+              {% endif %}
+            </td>
+            <td>{{ s["message_count"] }}</td>
+            <td><a href="{{ url_for('admin_session', session_id=s['id']) }}">transcript</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8">No sessions yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

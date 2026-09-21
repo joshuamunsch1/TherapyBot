@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TherapyBot — Session</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <h1>TherapyBot</h1>
+    <p class="subtitle">{{ strings["patient_info"] }}: {{ persona["name"] }}</p>
+
+    <div class="card">
+      <div class="patient-header">
+        <div class="patient-avatar">🧑</div>
+        <div class="patient-meta">
+          <div class="name">{{ persona["name"] }}</div>
+          <div class="details">{{ persona["age"] }} {{ strings["years_old"] }} · {{ occupation }}</div>
+        </div>
+      </div>
+
+      <div id="history"></div>
+
+      <div id="chat-controls">
+        <div class="input-row">
+          <textarea id="prompt" rows="1" placeholder="{{ strings['placeholder'] }}"></textarea>
+          <button id="send">{{ strings["send"] }}</button>
+        </div>
+        <div id="status"></div>
+        <button id="finish" class="secondary" style="margin-top:12px; width:100%;">{{ strings["finish"] }}</button>
+      </div>
+
+      <div id="diagnosis-panel" class="hidden">
+        <h2>{{ strings["diagnosis_title"] }}</h2>
+        <div class="field">
+          <select id="diagnosis-select"></select>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label for="justification">{{ strings["justification_label"] }}</label>
+          <textarea id="justification" rows="3"></textarea>
+        </div>
+        <button id="submit-diagnosis" style="margin-top:14px;">{{ strings["submit_diagnosis"] }}</button>
+        <div id="diagnosis-error" class="error hidden" style="margin-top:8px;"></div>
+      </div>
+
+      <div id="feedback-panel" class="hidden">
+        <div id="feedback-banner" class="banner"></div>
+        <p class="feedback-text" style="margin-top:14px;">
+          <span id="feedback-actual" class="feedback-actual"></span>
+        </p>
+        <p class="feedback-text" id="feedback-explanation" style="margin-top:10px;"></p>
+        <a href="/" style="margin-top:18px; display:inline-block;">
+          <button class="secondary">{{ strings["back_home"] }}</button>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script id="session-config" type="application/json">{{ config_json | safe }}</script>
+  <script src="{{ url_for('static', filename='session.js') }}"></script>
+</body>
+</html>

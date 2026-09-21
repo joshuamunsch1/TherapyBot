@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TherapyBot — Transcript</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <h1>Transcript</h1>
+    <p class="subtitle"><a href="{{ url_for('admin') }}">← back to session list</a></p>
+
+    <div class="card">
+      <div class="kv">
+        <div><strong>Student</strong> {{ session["student_name"] }}</div>
+        <div><strong>Started</strong> {{ session["started_at"] }}</div>
+        <div><strong>Language</strong> {{ session["language"] }}</div>
+        <div><strong>Persona</strong> {{ session["persona"]["name"] }},
+          {{ session["persona"]["age"] }}, {{ session["persona"]["occupation_en"] }}</div>
+        <div><strong>Disorder</strong> {{ session["disorder_label"] }}</div>
+        <div><strong>Guess</strong>
+          {% if session["guess_label"] %}
+            {{ session["guess_label"] }}
+            {% if session["diagnosis_correct"] %}
+              <span class="tag correct">correct</span>
+            {% else %}
+              <span class="tag incorrect">incorrect</span>
+            {% endif %}
+          {% else %}— (not submitted){% endif %}
+        </div>
+        {% if session["justification"] %}
+        <div><strong>Justification</strong> {{ session["justification"] }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div id="history" style="max-height:none;">
+        {% for m in messages %}
+        <div class="bubble {{ m['role'] }}">
+          <div class="label">
+            {% if m["role"] == "user" %}{{ session["student_name"] }} (therapist)
+            {% else %}{{ session["persona"]["name"] }} (patient){% endif %}
+          </div>
+          <div>{{ m["content"] }}</div>
+        </div>
+        {% else %}
+        <div class="hint">No messages in this session.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
