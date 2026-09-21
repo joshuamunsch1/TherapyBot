@@ -11,8 +11,27 @@ const diagnosisPanel = document.getElementById("diagnosis-panel");
 const diagnosisSelect = document.getElementById("diagnosis-select");
 const diagnosisError = document.getElementById("diagnosis-error");
 const feedbackPanel = document.getElementById("feedback-panel");
+const remainingEl = document.getElementById("remaining");
 
 let hintEl = null;
+let remaining = config.maxUserMessages
+  ? Math.max(0, config.maxUserMessages - config.userMessagesUsed)
+  : null;
+
+function updateRemaining() {
+  if (remaining === null) return;
+  remainingEl.textContent = S.remaining.replace("{n}", remaining);
+  remainingEl.classList.toggle("low", remaining <= 5);
+  if (remaining <= 0) lockInput(S.limit_reached);
+}
+
+// Called when the cap is hit: no more messages, only the diagnosis remains.
+function lockInput(message) {
+  promptEl.disabled = true;
+  sendBtn.disabled = true;
+  setStatus(message, false);
+  showDiagnosisPanel();
+}
 
 function appendBubble(role, text) {
   if (hintEl) { hintEl.remove(); hintEl = null; }
@@ -59,16 +78,31 @@ async function sendMessage() {
       body: JSON.stringify({ text }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Unknown error");
+    if (!res.ok) {
+      if (data.limit_reached) {
+        // The server did not store this message; drop the bubble we drew optimistically.
+        historyEl.lastElementChild?.remove();
+        remaining = 0;
+        updateRemaining();
+        return;
+      }
+      throw new Error(data.error || "Unknown error");
+    }
     appendBubble("assistant", data.reply);
     setStatus("");
+    if (data.remaining !== null && data.remaining !== undefined) {
+      remaining = data.remaining;
+      updateRemaining();
+    }
   } catch (err) {
     setStatus("Error: " + err.message, true);
     promptEl.value = text; // let the student retry without retyping
   } finally {
-    sendBtn.disabled = false;
     finishBtn.disabled = false;
-    promptEl.focus();
+    if (remaining === null || remaining > 0) {
+      sendBtn.disabled = false;
+      promptEl.focus();
+    }
   }
 }
 
@@ -155,5 +189,6 @@ if (config.messages.length === 0) {
 if (config.finished && config.feedback) {
   showFeedback(config.feedback);
 } else {
-  promptEl.focus();
+  updateRemaining();
+  if (remaining === null || remaining > 0) promptEl.focus();
 }

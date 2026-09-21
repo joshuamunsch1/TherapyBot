@@ -17,6 +17,13 @@
         <input type="text" id="name" autocomplete="off" autofocus />
       </div>
 
+      {% if access_code_required %}
+      <div class="field">
+        <label for="access-code">Access code / Zugangscode</label>
+        <input type="text" id="access-code" autocomplete="off" />
+      </div>
+      {% endif %}
+
       <div class="field">
         <label>Session language / Sitzungssprache</label>
         <div class="lang-toggle">
@@ -47,13 +54,20 @@
   <script>
     const startBtn = document.getElementById("start");
     const nameEl = document.getElementById("name");
+    const codeEl = document.getElementById("access-code");
     const errorEl = document.getElementById("form-error");
 
     async function start() {
       const name = nameEl.value.trim();
       const language = document.querySelector('input[name="language"]:checked').value;
+      const access_code = codeEl ? codeEl.value.trim() : "";
       if (!name) {
         errorEl.textContent = "Please enter your name or student ID. / Bitte Name oder Studierenden-Nr. eingeben.";
+        errorEl.classList.remove("hidden");
+        return;
+      }
+      if (codeEl && !access_code) {
+        errorEl.textContent = "Please enter the access code. / Bitte Zugangscode eingeben.";
         errorEl.classList.remove("hidden");
         return;
       }
@@ -63,7 +77,7 @@
         const res = await fetch("/api/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, language }),
+          body: JSON.stringify({ name, language, access_code }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Unknown error");
@@ -77,6 +91,7 @@
 
     startBtn.addEventListener("click", start);
     nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
+    if (codeEl) codeEl.addEventListener("keydown", (e) => { if (e.key === "Enter") start(); });
   </script>
 </body>
 </html>

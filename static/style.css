@@ -172,8 +172,11 @@ button.secondary:hover { background: #e2e5ee; }
 .input-row { display: flex; gap: 10px; align-items: flex-end; }
 .input-row textarea { resize: none; min-height: 46px; max-height: 180px; }
 
-#status { font-size: 0.85rem; color: #667; min-height: 1.2em; }
+.status-row { display: flex; justify-content: space-between; gap: 10px; min-height: 1.2em; }
+#status { font-size: 0.85rem; color: #667; }
 #status.error { color: #c0392b; }
+#remaining { font-size: 0.8rem; color: #99a; white-space: nowrap; }
+#remaining.low { color: #b03a2e; font-weight: 600; }
 
 /* ---- diagnosis & feedback ---- */
 

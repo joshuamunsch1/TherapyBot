@@ -9,7 +9,11 @@
 <body>
   <div class="container">
     <h1>Transcript</h1>
-    <p class="subtitle"><a href="{{ url_for('admin') }}">← back to session list</a></p>
+    <p class="subtitle">
+      <a href="{{ url_for('admin') }}">← back to session list</a>
+      &nbsp;·&nbsp;
+      <a href="{{ url_for('admin_transcript_txt', session_id=session['id']) }}">download as .txt</a>
+    </p>
 
     <div class="card">
       <div class="kv">

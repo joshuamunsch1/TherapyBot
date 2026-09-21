@@ -2,6 +2,7 @@ import os
 import csv
 import io
 import json
+import logging
 import secrets
 from functools import wraps
 
@@ -25,12 +26,33 @@ import db
 # to be set in the shell on every start. Real environment variables win.
 load_dotenv()
 
+log = logging.getLogger("therapybot")
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("THERAPYBOT_SECRET", secrets.token_hex(32))
+app.secret_key = os.environ.get("THERAPYBOT_SECRET") or secrets.token_hex(32)
 
 MODEL = os.environ.get("THERAPYBOT_MODEL", "claude-opus-5")
 ADMIN_PASSWORD = os.environ.get("THERAPYBOT_ADMIN_PASSWORD", "admin")
 MAX_MESSAGE_CHARS = 2000
+
+# Course access code students must enter to start a session. Empty = no code
+# required (fine locally; on a public URL this leaves the API budget unguarded).
+ACCESS_CODE = (os.environ.get("THERAPYBOT_ACCESS_CODE") or "").strip()
+
+# Hard cap on student turns per session. Bounds the API cost of a single
+# session no matter what a student does; 0 disables the cap.
+MAX_USER_MESSAGES = int(os.environ.get("THERAPYBOT_MAX_MESSAGES", "40"))
+
+# Startup warnings for production misconfiguration. Logged at import time so
+# they also show under gunicorn, where the __main__ block never runs.
+if not os.environ.get("THERAPYBOT_SECRET"):
+    log.warning("THERAPYBOT_SECRET is not set: admin logins will not survive a restart "
+                "and will fail intermittently with more than one worker process.")
+if ADMIN_PASSWORD == "admin":
+    log.warning("THERAPYBOT_ADMIN_PASSWORD is the default 'admin' - change it before exposing this server.")
+if not ACCESS_CODE:
+    log.warning("THERAPYBOT_ACCESS_CODE is not set: anyone with the URL can start sessions.")
 
 # Created lazily so the server can start (and show a clear error) without a key.
 _client = None
@@ -64,6 +86,8 @@ STRINGS = {
         "back_home": "Start a new session",
         "patient_info": "Patient",
         "years_old": "years old",
+        "limit_reached": "You have reached the maximum number of messages for this session. Please submit your diagnosis.",
+        "remaining": "{n} messages left",
     },
     "de": {
         "you": "Sie (Therapeut:in)",
@@ -82,6 +106,8 @@ STRINGS = {
         "back_home": "Neue Sitzung starten",
         "patient_info": "Patient:in",
         "years_old": "Jahre alt",
+        "limit_reached": "Sie haben die maximale Anzahl Nachrichten für diese Sitzung erreicht. Bitte reichen Sie Ihre Diagnose ein.",
+        "remaining": "{n} Nachrichten übrig",
     },
 }
 
@@ -92,7 +118,7 @@ STRINGS = {
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", access_code_required=bool(ACCESS_CODE))
 
 
 @app.route("/api/session", methods=["POST"])
@@ -104,6 +130,10 @@ def create_session():
         return jsonify({"error": "Please enter your name or student ID."}), 400
     if language not in ("en", "de"):
         return jsonify({"error": "Invalid language."}), 400
+    if ACCESS_CODE:
+        supplied = (data.get("access_code") or "").strip()
+        if not secrets.compare_digest(supplied, ACCESS_CODE):
+            return jsonify({"error": "Wrong access code. / Falscher Zugangscode."}), 403
 
     case = cases.pick_case()
     persona = cases.make_persona(case)
@@ -127,14 +157,17 @@ def session_page(session_id):
     if finished:
         feedback = _feedback_payload(session)
 
+    messages = db.get_messages(session_id)
     config = {
         "sessionId": session_id,
         "patientName": persona["name"],
         "strings": strings,
         "options": cases.diagnosis_options(language),
-        "messages": db.get_messages(session_id),
+        "messages": messages,
         "finished": finished,
         "feedback": feedback,
+        "maxUserMessages": MAX_USER_MESSAGES,
+        "userMessagesUsed": sum(1 for m in messages if m["role"] == "user"),
     }
     return render_template(
         "session.html",
@@ -159,6 +192,11 @@ def send_message(session_id):
         return jsonify({"error": "Empty message."}), 400
     if len(text) > MAX_MESSAGE_CHARS:
         return jsonify({"error": f"Message too long (max {MAX_MESSAGE_CHARS} characters)."}), 400
+    if MAX_USER_MESSAGES and db.count_user_messages(session_id) >= MAX_USER_MESSAGES:
+        return jsonify({
+            "error": STRINGS[session["language"]]["limit_reached"],
+            "limit_reached": True,
+        }), 409
 
     if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
         return jsonify({"error": "Server is missing ANTHROPIC_API_KEY — set it and restart."}), 500
@@ -204,7 +242,10 @@ def send_message(session_id):
     # Persist only after a successful API call so a failed attempt leaves no residue.
     db.add_message(session_id, "user", text)
     db.add_message(session_id, "assistant", reply)
-    return jsonify({"reply": reply})
+    remaining = None
+    if MAX_USER_MESSAGES:
+        remaining = max(0, MAX_USER_MESSAGES - db.count_user_messages(session_id))
+    return jsonify({"reply": reply, "remaining": remaining})
 
 
 @app.route("/api/session/<session_id>/diagnosis", methods=["POST"])
@@ -296,6 +337,42 @@ def admin_session(session_id):
     return render_template("admin_session.html", session=session, messages=messages)
 
 
+@app.route("/admin/session/<session_id>/transcript.txt")
+@admin_required
+def admin_transcript_txt(session_id):
+    """One session as a readable text file, for archiving or sharing with a reviewer."""
+    session = db.get_session(session_id)
+    if session is None:
+        return redirect(url_for("admin"))
+    persona = session["persona"]
+    lines = [
+        f"TherapyBot transcript {session_id}",
+        f"Student:    {session['student_name']}",
+        f"Started:    {session['started_at']}",
+        f"Language:   {session['language']}",
+        f"Patient:    {persona['name']}, {persona['age']}, {persona['occupation_en']}",
+        f"Disorder:   {cases.diagnosis_label(session['disorder_id'], 'en')}",
+        "Guess:      " + (
+            f"{cases.diagnosis_label(session['diagnosis_guess'], 'en')} "
+            f"({'correct' if session['diagnosis_correct'] else 'incorrect'})"
+            if session["diagnosis_guess"] else "(not submitted)"
+        ),
+    ]
+    if session["justification"]:
+        lines.append(f"Justification: {session['justification']}")
+    lines.append("")
+    for m in db.get_messages(session_id):
+        speaker = "THERAPIST" if m["role"] == "user" else "PATIENT"
+        lines.append(f"[{m['created_at']}] {speaker}:")
+        lines.append(m["content"])
+        lines.append("")
+    return Response(
+        "\n".join(lines),
+        mimetype="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=therapybot_{session_id[:8]}.txt"},
+    )
+
+
 @app.route("/admin/export.csv")
 @admin_required
 def export_csv():
@@ -335,6 +412,8 @@ def export_json():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    # Local development only. In production run under gunicorn instead, e.g.
+    #   gunicorn --workers 2 --threads 8 --timeout 120 app:app
     port = int(os.environ.get("PORT", 5000))
     print(f"TherapyBot running on http://localhost:{port}  (admin: /admin)")
     print("Make sure ANTHROPIC_API_KEY is set in your environment.")

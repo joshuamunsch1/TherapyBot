@@ -1,12 +1,17 @@
 """SQLite persistence for sessions and messages."""
 
 import json
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "sessions.db"
+# Where the SQLite file lives. Defaults to the project directory for local use.
+# On a hosting platform with an ephemeral filesystem (Render, Railway, Fly, ...)
+# point this at a persistent disk, e.g. THERAPYBOT_DB_PATH=/var/data/sessions.db,
+# otherwise every deploy or restart wipes all transcripts.
+DB_PATH = Path(os.environ.get("THERAPYBOT_DB_PATH") or Path(__file__).parent / "sessions.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -37,13 +42,18 @@ def _now():
 
 
 def connect():
-    conn = sqlite3.connect(DB_PATH)
+    # timeout: wait for a concurrent writer instead of raising "database is
+    # locked" when several gunicorn threads store messages at the same time.
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
+        # WAL lets readers (admin page, exports) run while a write is in flight.
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA)
 
 
@@ -83,6 +93,16 @@ def get_messages(session_id):
             (session_id,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def count_user_messages(session_id):
+    """Number of student turns so far — used to enforce the per-session cap."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ? AND role = 'user'",
+            (session_id,),
+        ).fetchone()
+    return row[0]
 
 
 def record_diagnosis(session_id, guess, correct, justification):

@@ -1,0 +1,36 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# In the Render dashboard: New -> Blueprint -> pick this repository. Render
+# reads this file and creates the web service and its persistent disk.
+services:
+  - type: web
+    name: therapybot
+    runtime: python
+    region: frankfurt          # EU hosting; change if your institution needs another region
+    plan: starter              # the free plan sleeps when idle and cannot mount a disk
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    autoDeploy: true
+    disk:
+      name: therapybot-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: THERAPYBOT_DB_PATH
+        value: /var/data/sessions.db
+      - key: THERAPYBOT_SECRET
+        generateValue: true    # Render generates a random value once and keeps it
+      - key: THERAPYBOT_MODEL
+        value: claude-opus-5
+      - key: THERAPYBOT_MAX_MESSAGES
+        value: "40"
+      # The three below are secrets: Render prompts you for them when you
+      # create the Blueprint, and they never go into the repository.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: THERAPYBOT_ADMIN_PASSWORD
+        sync: false
+      - key: THERAPYBOT_ACCESS_CODE
+        sync: false

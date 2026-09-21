@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 sessions.db
+sessions.db-wal
+sessions.db-shm
 .env
 venv/
 .venv/
