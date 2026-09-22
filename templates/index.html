@@ -79,7 +79,12 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, language, access_code }),
         });
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          data = { error: `Server error (${res.status}). Please try again in a moment.` };
+        }
         if (!res.ok) throw new Error(data.error || "Unknown error");
         window.location.href = "/session/" + data.session_id;
       } catch (err) {

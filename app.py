@@ -18,6 +18,7 @@ from flask import (
     session as flask_session,
     url_for,
 )
+from werkzeug.exceptions import HTTPException
 
 import cases
 import db
@@ -112,6 +113,33 @@ STRINGS = {
         "remaining": "{n} Nachrichten übrig",
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(error):
+    """Make failures legible instead of dumping an HTML page into fetch().
+
+    The browser calls /api/... expecting JSON. Flask's default 500 page is
+    HTML, so any server fault used to surface in the student's browser as a
+    JSON parse error with no clue about the cause.
+    """
+    if isinstance(error, HTTPException):
+        return error  # 404, 405 and friends keep their normal behaviour
+
+    log.exception("Unhandled error on %s %s", request.method, request.path)
+
+    waking = isinstance(error, db.DatabaseUnavailable)
+    status = 503 if waking else 500
+    message = str(error) if waking else (
+        "The server hit an unexpected error. Please try again."
+    )
+    if request.path.startswith("/api/"):
+        return jsonify({"error": message, "retry": waking}), status
+    return render_template("error.html", message=message), status
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +341,7 @@ def admin_logout():
     return redirect(url_for("index"))
 
 
-@app.route("/admin")
+@app.route("/admin", strict_slashes=False)
 @admin_required
 def admin():
     sessions = db.list_sessions()

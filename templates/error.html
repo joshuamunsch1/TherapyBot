@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TherapyBot — Something went wrong</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container narrow">
+    <h1>TherapyBot</h1>
+    <div class="card">
+      <div class="banner incorrect">Something went wrong</div>
+      <p class="feedback-text" style="margin-top:14px;">{{ message }}</p>
+      <a href="/" style="margin-top:18px; display:inline-block;">
+        <button class="secondary">Back to the start page</button>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -55,6 +55,16 @@ function showHint() {
   historyEl.appendChild(hintEl);
 }
 
+// A server fault (or a platform error page) can return HTML, not JSON.
+// Turn that into a readable message instead of a JSON parse exception.
+async function readJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return { error: `Server error (${res.status}). Please try again in a moment.` };
+  }
+}
+
 function setStatus(text, isError) {
   statusEl.textContent = text || "";
   statusEl.classList.toggle("error", !!isError);
@@ -77,7 +87,7 @@ async function sendMessage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
-    const data = await res.json();
+    const data = await readJson(res);
     if (!res.ok) {
       if (data.limit_reached) {
         // The server did not store this message; drop the bubble we drew optimistically.
@@ -145,7 +155,7 @@ async function submitDiagnosis() {
         justification: document.getElementById("justification").value.trim(),
       }),
     });
-    const data = await res.json();
+    const data = await readJson(res);
     if (!res.ok) throw new Error(data.error || "Unknown error");
     showFeedback(data);
   } catch (err) {

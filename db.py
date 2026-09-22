@@ -14,14 +14,23 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
+import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+from psycopg_pool import NullConnectionPool, PoolTimeout
 
 DATABASE_URL = (os.environ.get("DATABASE_URL") or "").strip()
 
 # One connection per gunicorn thread at peak: a thread holds a connection only
 # while it reads or writes, never while waiting on the model.
 POOL_MAX_SIZE = int(os.environ.get("THERAPYBOT_DB_POOL_SIZE", "8"))
+
+# How long a single request may wait to get a connection. Generous, because a
+# serverless database that has gone to sleep needs a few seconds to wake up.
+POOL_TIMEOUT = float(os.environ.get("THERAPYBOT_DB_TIMEOUT", "30"))
+
+
+class DatabaseUnavailable(RuntimeError):
+    """Raised when no connection could be established, after retrying."""
 
 MISSING_URL_MESSAGE = (
     "DATABASE_URL is not set. TherapyBot keeps transcripts in Postgres so they "
@@ -60,33 +69,71 @@ def _now():
 
 
 def get_pool():
-    """The process-wide connection pool, created on first use."""
+    """The process-wide connection pool, created on first use.
+
+    A *null* pool holds no idle connections: each request opens one and closes
+    it again. That is deliberate. Serverless Postgres suspends itself after a
+    few minutes of inactivity and drops whatever connections were open, so a
+    pool that cached them would hand out dead sockets after every quiet spell.
+    Connection reuse buys little here anyway - requests arrive seconds apart and
+    are dominated by the model call - and Neon already pools server side through
+    PgBouncer, which is the case its own documentation recommends a null pool for.
+    """
     global _pool
     if _pool is None:
         if not DATABASE_URL:
             raise RuntimeError(MISSING_URL_MESSAGE)
-        _pool = ConnectionPool(
+        _pool = NullConnectionPool(
             DATABASE_URL,
-            min_size=1,
-            max_size=POOL_MAX_SIZE,
-            kwargs={"row_factory": dict_row},
-            # Serverless Postgres (Neon, Supabase) drops idle connections when it
-            # suspends. Test one before handing it out, so the first student back
-            # after a quiet spell gets a fresh connection instead of an error.
-            check=ConnectionPool.check_connection,
-            # Fail a request in 10s rather than the 30s default, so a database
-            # that is down surfaces a clear error instead of a hung page.
-            timeout=10,
+            max_size=POOL_MAX_SIZE,   # min_size is always 0 for a null pool
+            kwargs={
+                "row_factory": dict_row,
+                # Bound a single connection attempt so it cannot hang forever.
+                "connect_timeout": 15,
+            },
+            timeout=POOL_TIMEOUT,
             open=True,
         )
     return _pool
 
 
+def _acquire(pool, attempts=3):
+    """Get a connection, retrying while a sleeping database wakes up.
+
+    Only acquisition is retried, never a statement: by the time a connection is
+    handed out nothing has run yet, so a retry cannot duplicate a write.
+    """
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return pool.getconn()
+        except (PoolTimeout, psycopg.OperationalError) as error:
+            last_error = error
+            if attempt < attempts:
+                time.sleep(attempt)   # 1s, then 2s
+    raise DatabaseUnavailable(
+        "The database did not answer in time. It may be waking up from idle - "
+        "please try again in a few seconds."
+    ) from last_error
+
+
 @contextmanager
 def connect():
     """A pooled connection: commits on clean exit, rolls back on exception."""
-    with get_pool().connection() as conn:
+    pool = get_pool()
+    conn = _acquire(pool)
+    try:
         yield conn
+    except BaseException:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    else:
+        conn.commit()
+    finally:
+        pool.putconn(conn)
 
 
 def init_db(attempts=5):

@@ -131,6 +131,24 @@ database stays where it is.
 To run under gunicorn on any other host, use the same command:
 `gunicorn --workers 1 --threads 8 --timeout 120 app:app`.
 
+### Sleeping databases
+
+Neon suspends a free database after a few minutes without queries and drops
+whatever connections were open. The app therefore keeps **no** idle database
+connections: it opens one per request and closes it again, so there is never a
+dead connection waiting to be handed out. Connection attempts are retried while
+the database wakes, and if it still does not answer the student sees a short
+"try again in a few seconds" message rather than an error page.
+
+Render's health check polls `/`, which deliberately touches no database. That
+keeps the web service warm without holding the database awake and burning free
+compute hours.
+
+If students ever do report an error, the server log names the cause on the
+final line of the traceback. `PoolTimeout` means the database did not wake in
+time, and raising `THERAPYBOT_DB_TIMEOUT` above its default of 30 seconds is
+the fix.
+
 ## Reviewing transcripts
 
 Every message is written to the database as it is sent, so a session is
