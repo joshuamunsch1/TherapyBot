@@ -20,9 +20,18 @@ Copy `.env.example` to `.env` and put your Anthropic API key in it:
 copy .env.example .env       # Windows  (Linux/macOS: cp .env.example .env)
 ```
 
-Then open `.env` in a text editor and replace the placeholder key with your real
-one from https://console.anthropic.com. `.env` is git-ignored, so the key never
-gets committed. Start the server:
+Then open `.env` in a text editor and fill in two required values: your
+Anthropic API key from https://console.anthropic.com, and `DATABASE_URL`.
+`.env` is git-ignored, so neither ends up in the repository.
+
+TherapyBot stores transcripts in Postgres rather than in a local file, so they
+survive restarts and redeploys on hosts with an ephemeral filesystem. For local
+development the quickest option is a free database from
+[Neon](https://neon.tech): create a project and paste the connection string it
+gives you into `DATABASE_URL`. A Postgres you run yourself works equally well.
+The tables are created automatically on first start.
+
+Start the server:
 
 ```
 python app.py
@@ -51,7 +60,8 @@ see "Deploying for a class" below.
 | `THERAPYBOT_SECRET` | random per start | Flask session secret. **Required in production**: without it admin logins drop on restart and fail with more than one worker |
 | `THERAPYBOT_ACCESS_CODE` | empty (no code) | Code students must enter to start a session. **Set this on any public URL**, otherwise anyone can spend your API credit |
 | `THERAPYBOT_MAX_MESSAGES` | `40` | Maximum student messages per session (`0` = unlimited). Bounds the cost of one session |
-| `THERAPYBOT_DB_PATH` | `sessions.db` next to `app.py` | Where the SQLite file lives. On a host with an ephemeral filesystem, point it at a persistent disk |
+| `DATABASE_URL` | — (required) | Postgres connection string where sessions and transcripts are stored |
+| `THERAPYBOT_DB_POOL_SIZE` | `8` | Maximum database connections. Match it to the gunicorn `--threads` count |
 | `PORT` | `5000` | HTTP port |
 
 All of these can be set either in `.env` or as real environment variables.
@@ -61,35 +71,65 @@ still at its unsafe default.
 ## Deploying for a class (Render)
 
 The app is a normal Flask service and runs anywhere Python runs. The included
-[`render.yaml`](render.yaml) describes a ready-made setup on
-[Render](https://render.com): one web service under gunicorn, a 1 GB
-persistent disk for the transcript database, and the environment variables
-above. Steps:
+[`render.yaml`](render.yaml) describes a setup on [Render](https://render.com)
+that costs nothing: one web service on Render's Free compute plan, with
+transcripts kept in a free Postgres database hosted elsewhere.
+
+The database has to live outside Render for a reason worth understanding. A
+free Render service has no persistent disk, and its filesystem is erased every
+time it restarts **or spins down after 15 minutes without traffic**. Anything
+written locally would disappear within the hour. An external database is not
+affected by any of that.
+
+### 1. Create the database
+
+1. Sign up at [neon.tech](https://neon.tech) and create a project. Pick the
+   region closest to your Render region (`eu-central-1` for Frankfurt) so the
+   two are not talking across an ocean.
+2. Copy the connection string. It looks like
+   `postgresql://user:password@host/dbname?sslmode=require`. Use the **pooled**
+   connection string if Neon offers you the choice.
+
+Neon's free tier does not expire. Render's own free Postgres does expire 30
+days after creation, so do not use that one for a course that runs longer.
+Supabase also works; its free database pauses after a week of inactivity and
+has to be resumed from their dashboard.
+
+### 2. Deploy the web service
 
 1. Push this repository to GitHub (or GitLab / Bitbucket).
 2. In the Render dashboard choose **New → Blueprint** and select the
    repository. Render reads `render.yaml`.
-3. Render asks for the three secrets marked `sync: false`: your Anthropic API
-   key, the instructor password, and the student access code. Fill them in.
-   `THERAPYBOT_SECRET` is generated automatically.
-4. Click **Apply**. The first deploy takes a couple of minutes. The service URL
-   looks like `https://therapybot.onrender.com`; hand it to students together
-   with the access code.
+3. Render asks for the four secrets marked `sync: false`: the database
+   connection string, your Anthropic API key, the instructor password, and the
+   student access code. `THERAPYBOT_SECRET` is generated automatically.
+4. Click **Apply**. The first deploy takes a couple of minutes. The tables are
+   created on first start. The service URL looks like
+   `https://therapybot.onrender.com`; hand it to students together with the
+   access code.
 5. In the Anthropic console, set a **monthly spend limit** on the API key's
    workspace so a leaked URL or code cannot run up an open-ended bill.
 
-Notes:
+### What the free plan costs you
 
-- The Starter plan is required: the free plan sleeps after idle (students would
-  wait a minute for the first page) and cannot mount a persistent disk.
-- With a disk attached, Render runs a single instance and deploys involve a
-  short restart. That is fine for this workload.
-- Transcripts live on the disk at `/var/data/sessions.db` and survive deploys
-  and restarts. Render takes daily disk snapshots; on top of that, download
-  `export.json` from the instructor area after each course block so you have an
-  off-platform copy.
-- To run under gunicorn on any other host use the same command:
-  `gunicorn --workers 2 --threads 8 --timeout 120 app:app`.
+- **The first request after a quiet spell is slow.** Render spins the service
+  down after 15 minutes of inactivity and takes about a minute to wake it.
+  Students who start a session at a random hour will wait; students working in
+  a group will not notice after the first one.
+- **750 instance hours per month per workspace.** A service only consumes them
+  while awake, so intermittent class use stays well inside the limit, but the
+  hours are shared with anything else you run free on Render.
+- **Render may suspend a free service that makes heavy outbound API calls.**
+  Calling the Anthropic API is this app's whole purpose. One class is unlikely
+  to trip it, but there is no appeal other than moving to a paid plan, which is
+  $7/month for the smallest instance.
+
+If any of that becomes a problem, the fix is to change `plan: free` to
+`plan: 0.5c-512mb` in `render.yaml` and redeploy. Nothing else changes, and the
+database stays where it is.
+
+To run under gunicorn on any other host, use the same command:
+`gunicorn --workers 1 --threads 8 --timeout 120 app:app`.
 
 ## Reviewing transcripts
 
@@ -105,6 +145,10 @@ you can:
 - download `export.json` (every session with its full transcript) for archiving
   or analysis scripts.
 
+Transcripts are safe from Render restarts, but a free database tier comes with
+no backup guarantees. Download `export.json` after each course block so you
+hold a copy that does not depend on anyone's free plan.
+
 ## How it works
 
 - The student enters a name/ID, picks English or German, and starts a session.
@@ -112,7 +156,8 @@ you can:
   randomized persona (name, age, occupation), and instructs the model via a
   system prompt to role-play that patient. The assigned disorder never leaves
   the server until the diagnosis is submitted.
-- Every message is stored in `sessions.db` (SQLite) as it happens.
+- Every message is stored in Postgres as it happens, so a session is recorded
+  even if the student closes the tab without submitting a diagnosis.
 - After submitting a diagnosis the student sees correct/incorrect, the true
   disorder, and a hand-written explanation of the key diagnostic pointers.
 

@@ -53,6 +53,8 @@ if ADMIN_PASSWORD == "admin":
     log.warning("THERAPYBOT_ADMIN_PASSWORD is the default 'admin' - change it before exposing this server.")
 if not ACCESS_CODE:
     log.warning("THERAPYBOT_ACCESS_CODE is not set: anyone with the URL can start sessions.")
+if not os.environ.get("DATABASE_URL"):
+    log.error("DATABASE_URL is not set - transcripts have nowhere to go and startup will fail.")
 
 # Created lazily so the server can start (and show a clear error) without a key.
 _client = None
@@ -387,7 +389,7 @@ def export_csv():
         writer.writerow([
             s["id"], s["student_name"], s["started_at"], s["language"],
             s["disorder_id"], s["diagnosis_guess"] or "",
-            "" if s["diagnosis_correct"] is None else s["diagnosis_correct"],
+            "" if s["diagnosis_correct"] is None else int(s["diagnosis_correct"]),
             s["justification"] or "", s["diagnosed_at"] or "", s["message_count"],
         ])
     return Response(
@@ -413,7 +415,7 @@ def export_json():
 
 if __name__ == "__main__":
     # Local development only. In production run under gunicorn instead, e.g.
-    #   gunicorn --workers 2 --threads 8 --timeout 120 app:app
+    #   gunicorn --workers 1 --threads 8 --timeout 120 app:app
     port = int(os.environ.get("PORT", 5000))
     print(f"TherapyBot running on http://localhost:{port}  (admin: /admin)")
     print("Make sure ANTHROPIC_API_KEY is set in your environment.")
