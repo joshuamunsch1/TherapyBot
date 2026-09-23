@@ -33,9 +33,9 @@ class DatabaseUnavailable(RuntimeError):
     """Raised when no connection could be established, after retrying."""
 
 MISSING_URL_MESSAGE = (
-    "DATABASE_URL is not set. TherapyBot keeps transcripts in Postgres so they "
-    "survive restarts. Create a free database (for example at neon.tech) and put "
-    "its connection string in DATABASE_URL."
+    "DATABASE_URL is not set. Psychopathology Training Bot keeps transcripts in "
+    "Postgres so they survive restarts. Create a free database (for example at "
+    "neon.tech) and put its connection string in DATABASE_URL."
 )
 
 SCHEMA = [

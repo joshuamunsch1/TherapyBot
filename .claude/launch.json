@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "therapybot",
+      "name": "psychopathology-training-bot",
       "runtimeExecutable": "python",
       "runtimeArgs": ["app.py"],
       "port": 5000

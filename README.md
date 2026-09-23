@@ -1,4 +1,4 @@
-# TherapyBot
+# Psychopathology Training Bot
 
 A training tool for psychology students: the student holds a pseudo therapy
 session with an AI-simulated patient that has been randomly assigned one of
@@ -24,9 +24,9 @@ Then open `.env` in a text editor and fill in two required values: your
 Anthropic API key from https://console.anthropic.com, and `DATABASE_URL`.
 `.env` is git-ignored, so neither ends up in the repository.
 
-TherapyBot stores transcripts in Postgres rather than in a local file, so they
-survive restarts and redeploys on hosts with an ephemeral filesystem. For local
-development the quickest option is a free database from
+Psychopathology Training Bot stores transcripts in Postgres rather than in a
+local file, so they survive restarts and redeploys on hosts with an ephemeral
+filesystem. For local development the quickest option is a free database from
 [Neon](https://neon.tech): create a project and paste the connection string it
 gives you into `DATABASE_URL`. A Postgres you run yourself works equally well.
 The tables are created automatically on first start.
@@ -51,6 +51,9 @@ for a single supervised classroom session; for homework use across a course,
 see "Deploying for a class" below.
 
 ## Environment variables
+
+The `THERAPYBOT_` prefix predates the project's rename and is kept so that
+existing deployments keep working without re-entering their secrets.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -105,8 +108,8 @@ has to be resumed from their dashboard.
    student access code. `THERAPYBOT_SECRET` is generated automatically.
 4. Click **Apply**. The first deploy takes a couple of minutes. The tables are
    created on first start. The service URL looks like
-   `https://therapybot.onrender.com`; hand it to students together with the
-   access code.
+   `https://psychopathology-training-bot.onrender.com`; hand it to students
+   together with the access code.
 5. In the Anthropic console, set a **monthly spend limit** on the API key's
    workspace so a leaked URL or code cannot run up an open-ended bill.
 
