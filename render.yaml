@@ -7,7 +7,7 @@
 # create separately and pass in as DATABASE_URL. See the README.
 services:
   - type: web
-    name: therapybot
+    name: psychopathology_training_bot
     runtime: python
     region: frankfurt          # EU hosting; put the database in the same region
     plan: free
