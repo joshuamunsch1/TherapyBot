@@ -109,6 +109,14 @@ button.secondary:hover { background: #e2e5ee; }
 
 .error { color: #c0392b; font-size: 0.88rem; }
 
+.page-footer { text-align: center; margin-top: 18px; }
+.page-footer a {
+  color: #99a;
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.page-footer a:hover { color: #4a5fc1; text-decoration: underline; }
+
 /* ---- chat ---- */
 
 .patient-header {
