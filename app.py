@@ -27,7 +27,7 @@ import db
 # to be set in the shell on every start. Real environment variables win.
 load_dotenv()
 
-log = logging.getLogger("therapybot")
+log = logging.getLogger("psychopathology_training_bot")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 app = Flask(__name__)
@@ -376,7 +376,7 @@ def admin_transcript_txt(session_id):
         return redirect(url_for("admin"))
     persona = session["persona"]
     lines = [
-        f"TherapyBot transcript {session_id}",
+        f"Psychopathology Training Bot transcript {session_id}",
         f"Student:    {session['student_name']}",
         f"Started:    {session['started_at']}",
         f"Language:   {session['language']}",
@@ -399,7 +399,7 @@ def admin_transcript_txt(session_id):
     return Response(
         "\n".join(lines),
         mimetype="text/plain; charset=utf-8",
-        headers={"Content-Disposition": f"attachment; filename=therapybot_{session_id[:8]}.txt"},
+        headers={"Content-Disposition": f"attachment; filename=psychopathology_training_bot_{session_id[:8]}.txt"},
     )
 
 
@@ -423,7 +423,7 @@ def export_csv():
     return Response(
         buffer.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=therapybot_sessions.csv"},
+        headers={"Content-Disposition": "attachment; filename=psychopathology_training_bot_sessions.csv"},
     )
 
 
@@ -433,7 +433,7 @@ def export_json():
     return Response(
         json.dumps(db.full_export(), indent=2, ensure_ascii=False),
         mimetype="application/json",
-        headers={"Content-Disposition": "attachment; filename=therapybot_sessions.json"},
+        headers={"Content-Disposition": "attachment; filename=psychopathology_training_bot_sessions.json"},
     )
 
 
@@ -445,6 +445,6 @@ if __name__ == "__main__":
     # Local development only. In production run under gunicorn instead, e.g.
     #   gunicorn --workers 1 --threads 8 --timeout 120 app:app
     port = int(os.environ.get("PORT", 5000))
-    print(f"TherapyBot running on http://localhost:{port}  (admin: /admin)")
+    print(f"Psychopathology Training Bot running on http://localhost:{port}  (admin: /admin)")
     print("Make sure ANTHROPIC_API_KEY is set in your environment.")
     app.run(host="0.0.0.0", port=port, debug=False)
