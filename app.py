@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 app = Flask(__name__)
 app.secret_key = os.environ.get("THERAPYBOT_SECRET") or secrets.token_hex(32)
 
-MODEL = os.environ.get("THERAPYBOT_MODEL", "claude-opus-5")
+MODEL = os.environ.get("THERAPYBOT_MODEL", "claude-sonnet-5")
 ADMIN_PASSWORD = os.environ.get("THERAPYBOT_ADMIN_PASSWORD", "admin")
 MAX_MESSAGE_CHARS = 2000
 

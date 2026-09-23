@@ -24,7 +24,7 @@ services:
       - key: THERAPYBOT_SECRET
         generateValue: true    # Render generates a random value once and keeps it
       - key: THERAPYBOT_MODEL
-        value: claude-opus-5
+        value: claude-sonnet-5
       - key: THERAPYBOT_MAX_MESSAGES
         value: "40"
       # The four below are secrets: Render prompts you for them when you create

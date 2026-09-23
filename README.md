@@ -55,7 +55,7 @@ see "Deploying for a class" below.
 | Variable | Default | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — (required) | API key for the model |
-| `THERAPYBOT_MODEL` | `claude-opus-5` | Claude model used for the patient |
+| `THERAPYBOT_MODEL` | `claude-sonnet-5` | Claude model used for the patient. `claude-opus-5` is stronger and about 2.5x the price |
 | `THERAPYBOT_ADMIN_PASSWORD` | `admin` | Password for the instructor area — **change this** |
 | `THERAPYBOT_SECRET` | random per start | Flask session secret. **Required in production**: without it admin logins drop on restart and fail with more than one worker |
 | `THERAPYBOT_ACCESS_CODE` | empty (no code) | Code students must enter to start a session. **Set this on any public URL**, otherwise anyone can spend your API credit |
